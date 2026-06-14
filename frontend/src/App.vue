@@ -1,8 +1,17 @@
 <template>
   <div class="flex h-screen">
     <!-- Sidebar -->
-    <div class="w-72 bg-gray-900 p-4 flex flex-col gap-4 overflow-y-auto">
+    <div v-if="!store.isShareMode" class="w-72 bg-gray-900 p-4 flex flex-col gap-4 overflow-y-auto">
       <h1 class="text-xl font-bold text-blue-400">天文星图渲染器</h1>
+
+      <!-- Share -->
+      <div>
+        <button @click="copyShareUrl"
+          class="w-full bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-2 text-sm font-medium transition-colors">
+          {{ shareCopied ? '已复制!' : '分享星空链接' }}
+        </button>
+        <p class="text-xs text-gray-500 mt-1">生成包含当前时间、纬度和视图的分享链接</p>
+      </div>
 
       <!-- Search -->
       <div>
@@ -75,16 +84,45 @@
     <!-- Sky Canvas -->
     <div class="flex-1 relative">
       <StarCanvas />
+      <button v-if="store.isShareMode" @click="exitShareMode"
+        class="absolute top-4 right-4 bg-gray-800 bg-opacity-80 hover:bg-opacity-100 text-white rounded px-3 py-1.5 text-sm transition-all">
+        退出分享模式
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useSkyStore } from './store/sky'
 import StarCanvas from './components/StarCanvas.vue'
 
 const store = useSkyStore()
 const dateStr = ref(new Date().toISOString().slice(0, 16))
+const shareCopied = ref(false)
+
 function updateDate() { store.viewDate = new Date(dateStr.value) }
+
+function copyShareUrl() {
+  const url = store.generateShareUrl()
+  navigator.clipboard.writeText(url).then(() => {
+    shareCopied.value = true
+    setTimeout(() => { shareCopied.value = false }, 2000)
+  })
+}
+
+function exitShareMode() {
+  store.isShareMode = false
+  window.history.replaceState(null, '', window.location.pathname)
+}
+
+watch(() => store.viewDate, (d) => {
+  dateStr.value = d.toISOString().slice(0, 16)
+})
+
+onMounted(() => {
+  if (store.loadFromUrl()) {
+    dateStr.value = store.viewDate.toISOString().slice(0, 16)
+  }
+})
 </script>

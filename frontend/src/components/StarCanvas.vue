@@ -1,6 +1,9 @@
 <template>
-  <canvas ref="canvasRef" class="w-full h-full bg-black cursor-crosshair"
-    @click="onClick" @wheel.prevent="onWheel" />
+  <canvas ref="canvasRef" class="w-full h-full bg-black"
+    :class="isDragging ? 'cursor-grabbing' : 'cursor-crosshair'"
+    @click="onClick" @wheel.prevent="onWheel"
+    @mousedown="onMouseDown" @mousemove="onMouseMove"
+    @mouseup="onMouseUp" @mouseleave="onMouseUp" />
 </template>
 
 <script setup lang="ts">
@@ -9,7 +12,13 @@ import { useSkyStore } from '../store/sky'
 
 const store = useSkyStore()
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const isDragging = ref(false)
 let animId = 0
+let dragStartX = 0
+let dragStartY = 0
+let dragStartPanX = 0
+let dragStartPanY = 0
+let hasDragged = false
 
 function draw() {
   const canvas = canvasRef.value
@@ -136,6 +145,7 @@ function draw() {
 }
 
 function onClick(e: MouseEvent) {
+  if (hasDragged) return
   const canvas = canvasRef.value!
   const rect = canvas.getBoundingClientRect()
   const x = (e.clientX - rect.left) * 2
@@ -147,6 +157,29 @@ function onClick(e: MouseEvent) {
 
 function onWheel(e: WheelEvent) {
   store.zoom = Math.max(0.3, Math.min(3, store.zoom + (e.deltaY > 0 ? -0.1 : 0.1)))
+}
+
+function onMouseDown(e: MouseEvent) {
+  if (e.button !== 0) return
+  isDragging.value = true
+  hasDragged = false
+  dragStartX = e.clientX
+  dragStartY = e.clientY
+  dragStartPanX = store.panX
+  dragStartPanY = store.panY
+}
+
+function onMouseMove(e: MouseEvent) {
+  if (!isDragging.value) return
+  const dx = (e.clientX - dragStartX) * 2
+  const dy = (e.clientY - dragStartY) * 2
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasDragged = true
+  store.panX = dragStartPanX + dx
+  store.panY = dragStartPanY + dy
+}
+
+function onMouseUp() {
+  isDragging.value = false
 }
 
 onMounted(() => draw())

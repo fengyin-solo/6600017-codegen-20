@@ -3,6 +3,18 @@ import { defineStore } from 'pinia'
 import { STARS, CONSTELLATIONS } from '../data/stars'
 import type { Star } from '../types'
 
+export interface ShareState {
+  t: string
+  lat: number
+  z: number
+  px: number
+  py: number
+  sl: boolean
+  sln: boolean
+  sg: boolean
+  s?: string
+}
+
 export const useSkyStore = defineStore('sky', () => {
   const viewDate = ref(new Date())
   const zoom = ref(1.0)
@@ -13,7 +25,8 @@ export const useSkyStore = defineStore('sky', () => {
   const showGrid = ref(true)
   const selectedStar = ref<Star | null>(null)
   const searchQuery = ref('')
-  const latitude = ref(39.9) // Beijing default
+  const latitude = ref(39.9)
+  const isShareMode = ref(false)
 
   const localSiderealTime = computed(() => {
     const d = viewDate.value
@@ -69,10 +82,68 @@ export const useSkyStore = defineStore('sky', () => {
     selectedStar.value = closest
   }
 
+  function serializeState(): string {
+    const state: ShareState = {
+      t: viewDate.value.toISOString(),
+      lat: Number(latitude.value.toFixed(2)),
+      z: Number(zoom.value.toFixed(2)),
+      px: Number(panX.value.toFixed(1)),
+      py: Number(panY.value.toFixed(1)),
+      sl: showLabels.value,
+      sln: showConstLines.value,
+      sg: showGrid.value,
+    }
+    if (selectedStar.value) {
+      state.s = selectedStar.value.name
+    }
+    return btoa(encodeURIComponent(JSON.stringify(state)))
+  }
+
+  function deserializeState(encoded: string): ShareState | null {
+    try {
+      return JSON.parse(decodeURIComponent(atob(encoded))) as ShareState
+    } catch {
+      return null
+    }
+  }
+
+  function generateShareUrl(): string {
+    const hash = serializeState()
+    const url = new URL(window.location.href)
+    url.hash = hash
+    return url.toString()
+  }
+
+  function loadFromUrl(): boolean {
+    const hash = window.location.hash.replace(/^#/, '')
+    if (!hash) return false
+    const state = deserializeState(hash)
+    if (!state) return false
+
+    if (state.t) {
+      const d = new Date(state.t)
+      if (!isNaN(d.getTime())) viewDate.value = d
+    }
+    if (typeof state.lat === 'number') latitude.value = state.lat
+    if (typeof state.z === 'number') zoom.value = state.z
+    if (typeof state.px === 'number') panX.value = state.px
+    if (typeof state.py === 'number') panY.value = state.py
+    if (typeof state.sl === 'boolean') showLabels.value = state.sl
+    if (typeof state.sln === 'boolean') showConstLines.value = state.sln
+    if (typeof state.sg === 'boolean') showGrid.value = state.sg
+    if (state.s) {
+      const star = STARS.find(s => s.name === state.s)
+      if (star) selectedStar.value = star
+    }
+    isShareMode.value = true
+    return true
+  }
+
   return {
     viewDate, zoom, panX, panY, showLabels, showConstLines, showGrid,
-    selectedStar, searchQuery, latitude, localSiderealTime, filteredStars,
+    selectedStar, searchQuery, latitude, localSiderealTime, filteredStars, isShareMode,
     projectStar, starRadius, spectralColor, selectStar,
+    serializeState, deserializeState, generateShareUrl, loadFromUrl,
     STARS, CONSTELLATIONS
   }
 })
